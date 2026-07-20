@@ -407,9 +407,20 @@ async fn run_until_exit(
 }
 
 pub(crate) fn spawn_ephemeral_daemon(config_dir: &std::path::Path) -> anyhow::Result<()> {
-    let exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("zeroclaw")))
+    // Look for zeroclaw on PATH first (Nix puts each package in a separate
+    // store path), then fall back to the sibling-in-same-directory heuristic
+    // used by `cargo install` / manual builds.
+    let exe = std::env::var_os("PATH")
+        .and_then(|path| {
+            std::env::split_paths(&path)
+                .map(|d| d.join("zeroclaw"))
+                .find(|p| p.exists())
+        })
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("zeroclaw")))
+        })
         .unwrap_or_else(|| PathBuf::from("zeroclaw"));
 
     let mut cmd = std::process::Command::new(&exe);
